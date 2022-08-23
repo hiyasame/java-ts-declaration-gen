@@ -64,7 +64,7 @@ class ASMTypeMapper {
             }
         // 处理数组
         if (currentStr.startsWith("[")) {
-            currentStr = "Array<" + currentStr.removePrefix("[") + ">"
+            currentStr = "Array<" + map(currentStr.removePrefix("[")) + ">"
         }
         return currentStr
     }

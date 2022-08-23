@@ -50,7 +50,7 @@ declare namespace org {
                 // @ts-ignore
                 setAttributes(param0: number /** S **/, param1: number /** S **/, param2: number /** S **/, param3: number /** I **/): void
                 // @ts-ignore
-                write(param0: Array<B>, param1: number /** I **/): number /** I **/
+                write(param0: Array<number /** B **/>, param1: number /** I **/): number /** I **/
                 // @ts-ignore
                 getWriteSize(): number /** I **/
                 // @ts-ignore
