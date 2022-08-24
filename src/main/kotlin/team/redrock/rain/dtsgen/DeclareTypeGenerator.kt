@@ -28,7 +28,9 @@ class DeclareTypeGenerator(
     fun generate(file: File) {
         // 跳过生成的kt lambda匿名类
         if (classNode.interfaces.any {
-                it.startsWith("kotlin/jvm/functions/Function") || it.equals("kotlin/coroutines/jvm/internal/SuspendFunction")
+                it.startsWith("kotlin/jvm/functions/Function")
+                        || it.equals("kotlin/coroutines/jvm/internal/SuspendFunction")
+                        || it == "kotlinx/serialization/internal/GeneratedSerializer"
             } || classNode.superName == "kotlin/coroutines/jvm/internal/ContinuationImpl"
             || classNode.access and Opcodes.ACC_SYNTHETIC != 0) {
             return
@@ -57,7 +59,9 @@ class DeclareTypeGenerator(
      * @param fieldNode
      */
     private fun RetractNode.writeField(fieldNode: FieldNode) {
-        writeTsIgnore()
+        if (fieldNode.access and Opcodes.ACC_SYNTHETIC != 0) {
+            return
+        }
         var content = ""
         if (fieldNode.access and Opcodes.ACC_PRIVATE != 0) {
             content += "private "
@@ -75,7 +79,13 @@ class DeclareTypeGenerator(
         }
         content += fieldNode.name
         val typeDesc = fieldNode.desc
-        content += ": ${typeMapper.map(typeDesc)}"
+        val type = typeMapper.map(typeDesc)
+        content += ": $type"
+        // 有些名称比较奇怪，写到d.ts里有语法错误，直接过滤掉
+        if (type.split(".").last().toIntOrNull() != null) {
+            return
+        }
+        writeTsIgnore()
         writeLine(content)
     }
 
@@ -103,6 +113,9 @@ class DeclareTypeGenerator(
      * 方法声明
      */
     private fun RetractNode.writeMethod(methodNode: MethodNode) {
+        if (methodNode.access and Opcodes.ACC_SYNTHETIC != 0) {
+            return
+        }
         // 过滤static静态块和kt生成的含有-的鬼畜方法
         if (methodNode.name == "<clinit>" || methodNode.name.contains("-")) {
             return
@@ -115,7 +128,6 @@ class DeclareTypeGenerator(
         if (params.lastOrNull() == "kotlin.coroutines.Continuation") {
             return
         }
-        writeTsIgnore()
         if (methodNode.name == "<init>") {
             writeConstructor(methodNode)
             return
@@ -136,9 +148,16 @@ class DeclareTypeGenerator(
             content += "static "
         }
         content += methodNode.name
-
+        // 有些名称比较奇怪，写到d.ts里有语法错误，直接过滤掉
+        if (
+            params.any { it.split(".").last().toIntOrNull() != null }
+            || result.split(".").last().toIntOrNull() != null
+        ) {
+            return
+        }
         var paramIdx = 0
         content += "(" + params.joinToString(", ") { "param${paramIdx++}: $it" } + "): $result"
+        writeTsIgnore()
         writeLine(content)
     }
 
