@@ -106,6 +106,7 @@ class DeclareTypeGenerator(
         } else {
             "(" + params.joinToString(", ") { s -> "param${paramIdx++}: $s" } + ")"
         }
+        writeTsIgnore()
         writeLine(content)
     }
 
