@@ -6,7 +6,7 @@
 
 > java -jar javatypes-dts-gen.jar <目标jar文件绝对路径>
 
-会在jar文件所在目录生成一个types文件夹，其中放有所有d.ts文件。实际开发中项目只需导入`index.d.ts`即可。
+会在jar文件所在目录生成一个npm项目，项目根目录下dist文件夹中有所有的d.ts文件，其中放有所有d.ts文件。建议发布直接发布npm包，使用时在项目中引用即可。
 
 ## 效果
 
@@ -77,5 +77,6 @@ declare namespace org {
 
 ## TODO
 
-- 对lambda表达式更加友好
-- 合并外部类与内部类
+- [x] 内部类逻辑处理
+- [x] 过滤掉Kotlin挂起函数 & 匿名类
+- [ ] 将函数式接口转换为ts function类型

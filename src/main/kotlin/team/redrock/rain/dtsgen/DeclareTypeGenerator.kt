@@ -3,6 +3,7 @@ package team.redrock.rain.dtsgen
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.tree.FieldNode
+import org.objectweb.asm.tree.InnerClassNode
 import org.objectweb.asm.tree.MethodNode
 import java.io.File
 
@@ -13,7 +14,11 @@ import java.io.File
  * @author 寒雨
  * @since 2022/8/22 19:56
  */
-class DeclareTypeGenerator(private val classNode: ClassNode) {
+class DeclareTypeGenerator(
+    private val classNode: ClassNode,
+    private val isInnerClass: Boolean = false,
+    private val innerClassNode: InnerClassNode? = null
+) {
 
     private val strList = mutableListOf<String>()
     private var nextLineIdx: Int = 0
@@ -21,6 +26,17 @@ class DeclareTypeGenerator(private val classNode: ClassNode) {
     private val methodSignatureRegex = "\\((?<params>(\\S+)?)\\)(?<result>\\S+)".toRegex()
 
     fun generate(file: File) {
+        // 跳过生成的kt lambda匿名类
+        if (classNode.interfaces.any {
+                it.startsWith("kotlin/jvm/functions/Function") || it.equals("kotlin/coroutines/jvm/internal/SuspendFunction")
+            } || classNode.superName == "kotlin/coroutines/jvm/internal/ContinuationImpl"
+            || classNode.access and Opcodes.ACC_SYNTHETIC != 0) {
+            return
+        }
+        // 跳过匿名内部类
+        if (isInnerClass && innerClassNode?.innerName == null && innerClassNode?.outerName == null) {
+            return
+        }
         if (!file.exists()) {
             file.createNewFile()
             withNewRetract {
@@ -87,6 +103,18 @@ class DeclareTypeGenerator(private val classNode: ClassNode) {
      * 方法声明
      */
     private fun RetractNode.writeMethod(methodNode: MethodNode) {
+        // 过滤static静态块和kt生成的含有-的鬼畜方法
+        if (methodNode.name == "<clinit>" || methodNode.name.contains("-")) {
+            return
+        }
+        val typeSignature = methodNode.desc
+        val namedGroup = methodSignatureRegex.find(typeSignature)!!.groups as MatchNamedGroupCollection
+        val params = typeMapper.splitTypes(namedGroup["params"]!!.value).map { typeMapper.map(it) }
+        val result = typeMapper.map(namedGroup["result"]!!.value)
+        // 过滤挂起函数
+        if (params.lastOrNull() == "kotlin.coroutines.Continuation") {
+            return
+        }
         writeTsIgnore()
         if (methodNode.name == "<init>") {
             writeConstructor(methodNode)
@@ -108,10 +136,7 @@ class DeclareTypeGenerator(private val classNode: ClassNode) {
             content += "static "
         }
         content += methodNode.name
-        val typeSignature = methodNode.desc
-        val namedGroup = methodSignatureRegex.find(typeSignature)!!.groups as MatchNamedGroupCollection
-        val params = typeMapper.splitTypes(namedGroup["params"]!!.value).map { typeMapper.map(it) }
-        val result = typeMapper.map(namedGroup["result"]!!.value)
+
         var paramIdx = 0
         content += "(" + params.joinToString(", ") { "param${paramIdx++}: $it" } + "): $result"
         writeLine(content)
@@ -126,16 +151,19 @@ class DeclareTypeGenerator(private val classNode: ClassNode) {
         writeTsIgnore()
         var content = ""
         var isClass = false
+        val className: String = if (isInnerClass) {
+            innerClassNode!!.innerName
+        } else {
+            classNode.name.split("/").last()
+        }
         // interface or enum or class
         content += if (classNode.access and Opcodes.ACC_INTERFACE != 0) {
             "interface"
-        } else if (classNode.access and Opcodes.ACC_ENUM != 0) {
-            "enum"
         } else {
             isClass = true
             "class"
         }
-        content += " ${classNode.name.split("/").last()}"
+        content += " $className"
         // 类一定有超类，就必须跟一个extends, java/lang/Object除外
         if (isClass) {
             content += " extends "
@@ -164,7 +192,11 @@ class DeclareTypeGenerator(private val classNode: ClassNode) {
      * @param nextNode
      */
     private inline fun RetractNode.writeNamespace(nextNode: RetractNode.() -> Unit) {
-        val namespaces = classNode.name.split("/").toMutableList().apply { removeLast() }
+        val namespaces = if (!isInnerClass) {
+            classNode.name.split("/").toMutableList().apply { removeLast() }
+        } else {
+            innerClassNode!!.outerName.split("/").toMutableList()
+        }
         var currentNode = this
         namespaces.forEachIndexed { index, s ->
             var contentStr = "namespace $s"

@@ -64,8 +64,10 @@ class ASMTypeMapper {
             }
         // 处理数组
         if (currentStr.startsWith("[")) {
-            currentStr = "Array<" + map(currentStr.removePrefix("[")) + ">"
+            currentStr = map(currentStr.removePrefix("[")) + "[]"
         }
+        // 替换内部类声明
+        currentStr = currentStr.replace("$", ".")
         return currentStr
     }
 
